@@ -11,7 +11,7 @@
 
 ## 🔨快速开始
 
-- [x] 下载我们的[数据集](https://pan.baidu.com/s/1mzrt0sqKBf-0cDfYQvwgpw)? 百度云提取码为:data
+- [x] 下载我们的[数据集](https://pan.baidu.com/s/1mzrt0sqKBf-0cDfYQvwgpw)? 百度云提取码为:data</br>
 如何制作自己的数据集? 在下面！ </br>
 
 下载的数据集在项目下直接解压</br>
@@ -104,6 +104,7 @@ e.g: train.txt
  ... ...
 
 如果训练txt正确的话，那么对图像文件存放格式没有要求
+你可以在data_generation.py中找到生成label.txt的函数，但训练txt也许需要你脚本实现
 ```
 
 ### train训练值得注意的点
@@ -115,8 +116,8 @@ e.g: train.txt
 5. 暂时想到这么多
 
 ### pred预测值得注意的点
-1. 预测是扫描根目录下所有的类别，并预测每个类别的图，他的格式如同一般的分类任务
-2. 预测犹豫使用了PyTorch的hook，所以对版本有一定要求，并且使用grad_cam（额外平滑），所以在预测时无法使用torch.no_gard，这会导致错误
+1. 预测是扫描根目录下所有的类别，并预测每个类别的图，他读取的格式如同一般的分类任务，如果你有需求同样修改他
+2. 预测由于使用了PyTorch的hook，所以对版本有一定要求，并且使用grad_cam（添加了额外平滑），所以在预测时无法使用torch.no_gard函数，使用会导致错误
 3. 注意！我使用的神经网络可视化来源于这个[项目库](https://github.com/frgfm/torch-cam)的独立，我将其拉取了出来以无需安装
 
 ## 致敬引用</br>
@@ -124,4 +125,4 @@ BAM、CBAM等注意力机制[项目库](https://github.com/Jongchan/attention-mo
 神经网络可视化[项目库](https://github.com/frgfm/torch-cam)</br>
 
 ## 🌹最后的发言
-让我们未来更美好的未来而战！---无论是流浪猫还是人
+让我们为了更美好的未来而战！---无论是流浪猫还是人
