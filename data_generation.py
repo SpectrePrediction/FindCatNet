@@ -1,8 +1,10 @@
-from xml.etree import ElementTree as Et
+﻿from xml.etree import ElementTree as Et
 import cv2
 import numpy as np
 import random
 import os
+import util.args as args
+
 '''
     定义read_xml_info读取数据格式
     {
@@ -263,7 +265,17 @@ class RandomImageGenerator:
 
         print(self.size_probability)
 
-    def save(self, root_path, txt_path, total):
+    def save(self, root_path, txt_path, total, mode):
+        """
+        mode in "seamlessClone","bitwise"
+        :param root_path:
+        :param txt_path:
+        :param total:
+        :param mode:
+        :return:
+        """
+        assert mode in ["seamlessClone", "bitwise"]
+
         f = open(txt_path, 'w')
 
         for label_name, image_list in self.image_dict.items():
@@ -314,24 +326,34 @@ class RandomImageGenerator:
                 # background[star_x:end_x, star_y:end_y] = image
 
                 # image[image == 0] += background[star_x:end_x, star_y:end_y]
-                roi = background[star_x:end_x, star_y:end_y]
 
                 mask_inv = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
                 # mask = image.copy()
                 mask_inv[mask_inv != 0] = 255
 
-                # img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                # img_gray[img_gray != 255] = 0
-                # ret, mask = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-                # cv2.imshow('t', mask)
+                # bit操作
+                if mode == "bitwise":
 
-                mask = cv2.bitwise_not(mask_inv)
-                roi_bg = cv2.bitwise_and(roi, roi, mask=mask)
+                    roi = background[star_x:end_x, star_y:end_y]
 
-                image_fg = cv2.bitwise_and(image, image, mask=mask_inv)
-                dst = cv2.add(roi_bg, image_fg)
+                    # img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                    # img_gray[img_gray != 255] = 0
+                    # ret, mask = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+                    # cv2.imshow('t', mask)
 
-                background[star_x:end_x, star_y:end_y] = dst
+                    mask = cv2.bitwise_not(mask_inv)
+                    roi_bg = cv2.bitwise_and(roi, roi, mask=mask)
+
+                    image_fg = cv2.bitwise_and(image, image, mask=mask_inv)
+                    dst = cv2.add(roi_bg, image_fg)
+
+                    background[star_x:end_x, star_y:end_y] = dst
+
+                # 使用无缝融合
+                if mode == "seamlessClone":
+                    background = cv2.seamlessClone(image, background, mask_inv,
+                                                   (star_y + (end_y - star_y) // 2, star_x + (end_x - star_x) // 2),
+                                                   cv2.NORMAL_CLONE)
 
                 # cv2.imshow(f'{background.shape}', background)
                 image_path = os.path.join(label_path, f"{i}.jpg")
@@ -361,9 +383,10 @@ if __name__ == '__main__':
     image_root_path = r"./original_image"
     label_save_path = r"./label.txt"
     image_save_root = r"./train"
-    every_class_image_num = 16
-    txt_save_path = os.path.join(image_save_root, "train.txt")
+    every_class_image_num = 500
+    txt_save_path = r"train.txt"
     background_size = (512, 512)
+    exec(args.get_args_compile())
 
     if not os.path.exists(image_save_root):
         os.mkdir(image_save_root)
@@ -455,4 +478,4 @@ if __name__ == '__main__':
         510: 0.15
     }
     rig = RandomImageGenerator(image_dict, background_list, label_dict, size_dict)
-    rig.save(image_save_root, txt_save_path, every_class_image_num)
+    rig.save(image_save_root, txt_save_path, every_class_image_num, "seamlessClone")

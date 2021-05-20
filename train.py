@@ -1,4 +1,4 @@
-import util.DateReader as dr
+﻿import util.DateReader as dr
 import numpy as np
 import cv2
 import models
@@ -8,6 +8,7 @@ import time
 import os
 from torch.cuda.amp import autocast as autocast
 from torch.cuda.amp import GradScaler as GradScaler
+import util.args as args
 
 
 @dr.data_read_function
@@ -23,19 +24,6 @@ def label_read_func(img_path, scripted_module):
 
 
 def main():
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-    learning_rate = 0.001
-    batch_size = 8
-    class_num = 13
-
-    read_data_cache = batch_size * 2
-    using_thread_num = 4
-    is_completion = True
-    is_show_progress = False
-
-    train_txt_path = r"./train.txt"
-    save_model_path = "./ckpt"
 
     if not os.path.exists(save_model_path):
         os.mkdir(save_model_path)
@@ -46,7 +34,8 @@ def main():
     resnext50_32x4d.fc = torch.nn.Linear(2048, class_num).to(device)
 
     criterion = torch.nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.AdamW(resnext50_32x4d.parameters(), lr=learning_rate, weight_decay=5e-3)
+    optimizer = torch.optim.AdamW(resnext50_32x4d.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
     # print(resnext50_32x4d)
 
     datareader = dr.DataReader(
@@ -61,9 +50,17 @@ def main():
         # is_shuffle  # 是否乱序 使用默认
     )
 
+    use_multiple_gpu = torch.cuda.device_count() > 1
+    print(f"can use {torch.cuda.device_count()} GPU")
+    if use_multiple_gpu:
+        resnext50_32x4d = torch.nn.DataParallel(resnext50_32x4d)
+
     scaler = GradScaler()
-    temp_epoch = -1
     total_step = datareader.total // batch_size
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor, patience=patience,
+                                                           cooldown=total_step * cooldown_epoch, verbose=verbose)
+
     for epoch, image, label in datareader:
         star = time.time()
         optimizer.zero_grad()
@@ -86,15 +83,42 @@ def main():
         # optimizer.step()
         scaler.update()
 
+        scheduler.step(loss)
+
         print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}]"
               f" epoch:{epoch}, loss:{loss}, batch_time:{time.time()-star}, "
-              f"step:{datareader.ont_epoch_step - 1}/{total_step}")
+              f"step:{datareader.ont_epoch_step - 1}/{total_step}, lr:{optimizer.state_dict()['param_groups'][0]['lr']}")
 
-        if epoch != temp_epoch:
-            temp_epoch = epoch
-            torch.save(resnext50_32x4d.state_dict(), os.path.join(save_model_path, f'model_{epoch}.ckpt'))
-        # break
+        if epoch % save_interval == 0:
+
+            save_state_dict = resnext50_32x4d.state_dict()
+            if use_multiple_gpu:
+                save_state_dict = resnext50_32x4d.module.state_dict()
+            torch.save(save_state_dict, os.path.join(save_model_path, f'model_{epoch}.ckpt'))
 
 
 if __name__ == '__main__':
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    learning_rate = 0.002  # 0.0006
+    batch_size = 32
+    class_num = 13
+
+    read_data_cache = batch_size * 2
+    using_thread_num = 6
+    is_completion = True
+    is_show_progress = False
+    weight_decay = 5e-3
+
+    factor = 0.8
+    patience = 10
+    cooldown_epoch = 4
+    verbose = False
+
+    save_interval = 1
+
+    train_txt_path = r"./train.txt"
+    save_model_path = "./ckpt"
+    exec(args.get_args_compile())
+
     main()

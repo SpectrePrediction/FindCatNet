@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import cv2
 import models
 import torchvision.transforms as transforms
@@ -6,6 +6,7 @@ import torch
 import os
 from util.torchcam.cams import SmoothGradCAMpp
 from util.torchcam.utils import overlay_mask
+import util.args as args
 
 
 def pred_read_func(img_path, scripted_module):
@@ -38,13 +39,8 @@ def get_success_rate(_out_label_list, _image_label):
 
 
 def pred():
-    class_num = 13
-    model_path = r"./ckpt/model_0.ckpt"
-    label_txt_path = r'label.txt'
-    image_root_path = r"./original_image"
-    cam_save_path = r"./pred_grad_cam"
 
-    if not os.path.exists(cam_save_path):
+    if not os.path.exists(cam_save_path) and not dont_save_cam:
         os.mkdir(cam_save_path)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -53,6 +49,7 @@ def pred():
 
     scripted_module = torch.jit.script(transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))
     resnext50_32x4d.fc = torch.nn.Linear(2048, class_num).to(device)
+
     resnext50_32x4d.load_state_dict(torch.load(model_path, map_location=device), strict=True)
     resnext50_32x4d.eval()
 
@@ -91,7 +88,8 @@ def pred():
 
             cv2.imshow("grad cam", save_image)
             cv2.waitKey(10)
-            cv2.imencode('.jpg', save_image)[1].tofile(os.path.join(cam_save_path, f"{label}{i}_预测{name}.jpg"))
+            if not dont_save_cam:
+                cv2.imencode('.jpg', save_image)[1].tofile(os.path.join(cam_save_path, f"{label}{i}_预测{name}.jpg"))
 
             cam_extractor.clear_hooks()
             cam_extractor._hooks_enabled = False
@@ -101,8 +99,18 @@ def pred():
         acc_list.append(acc)
         print(f" 准确率 {acc}\n")
 
-    print(f"平均 {sum(acc_list) / acc_list.__len__()}")
+    acc = sum(acc_list) / acc_list.__len__()
+    print(f"平均 {acc}")
 
 
 if __name__ == '__main__':
+    class_num = 13
+    model_path = r"./ckpt/model_18.ckpt"
+    label_txt_path = r'label.txt'
+    # image_root_path = r"./my_test"
+    image_root_path = r"original_image"
+    cam_save_path = r"./pred_grad_cam"
+    dont_save_cam = True
+    exec(args.get_args_compile())
+
     pred()
