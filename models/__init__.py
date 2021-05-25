@@ -1,4 +1,5 @@
 from .models import *
+from .loss import *
 # from .deform_conv import DeformConv2D  # 已经废弃，其使用方法如同torchvision示例：被我迁移至新库
 # from .vision_deform_conv import DeformConv2d_v1, DeformConv2d_v2  # 被嵌入模型中
 # DeformConv2D未来会在Torchvision.ops.DeformConv2D中选择
