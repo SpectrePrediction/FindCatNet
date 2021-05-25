@@ -28,10 +28,13 @@ def main():
     if not os.path.exists(save_model_path):
         os.mkdir(save_model_path)
 
-    resnext50_32x4d = models.resnext50_32x4d(pretrained=True, strict=False).to(device)
+    resnext50_32x4d = models.resnext50_32x4d(pretrained=pretrained, strict=False).to(device)
 
     scripted_module = torch.jit.script(transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))
     resnext50_32x4d.fc = torch.nn.Linear(2048, class_num).to(device)
+
+    if retrain:
+        resnext50_32x4d.load_state_dict(torch.load(retrain_model_path, map_location=device), strict=re_load_strict)
 
     criterion = torch.nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.AdamW(resnext50_32x4d.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -99,6 +102,11 @@ def main():
 
 if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    pretrained = True
+    retrain = True
+    re_load_strict = True
+    retrain_model_path = r"./ckpt_final/model_347.ckpt"
 
     learning_rate = 0.002  # 0.0006
     batch_size = 32
