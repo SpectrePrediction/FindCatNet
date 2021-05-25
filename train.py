@@ -28,12 +28,20 @@ def main():
     if not os.path.exists(save_model_path):
         os.mkdir(save_model_path)
 
-    resnext50_32x4d = models.resnext50_32x4d(pretrained=True, strict=False).to(device)
+    resnext50_32x4d = models.resnext50_32x4d(pretrained=pretrained, strict=False).to(device)
 
     scripted_module = torch.jit.script(transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))
     resnext50_32x4d.fc = torch.nn.Linear(2048, class_num).to(device)
 
-    criterion = torch.nn.CrossEntropyLoss().cuda()
+    if retrain:
+        state_dict = torch.load(retrain_model_path, map_location=device)
+        if pretrained:
+            del state_dict['fc.weight']
+            del state_dict['fc.bias']
+        resnext50_32x4d.load_state_dict(state_dict, strict=re_load_strict)
+
+    # criterion = torch.nn.CrossEntropyLoss().cuda()
+    criterion = models.ContrastiveLoss().cuda()
     optimizer = torch.optim.AdamW(resnext50_32x4d.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     # print(resnext50_32x4d)
@@ -65,15 +73,25 @@ def main():
         star = time.time()
         optimizer.zero_grad()
 
+        image_1 = image[0:batch_size // 2]
+        image_2 = image[batch_size // 2:]
+
+        label = tuple(map(lambda x: 1 if x[0] == x[1] else 0, zip(label[0:batch_size // 2], label[batch_size // 2:])))
+
         # image = np.array(image)# .transpose((0, 3, 1, 2)).astype("float32") / 255.0
         # image = scripted_module(torch.as_tensor(image)).to(device)
-        image = torch.as_tensor(image, device=device)  # .to(device)
+        # image = torch.as_tensor(image, device=device)  # .to(device)
+        image_1 = torch.as_tensor(image_1, device=device)
+        image_2 = torch.as_tensor(image_2, device=device)
         label = torch.as_tensor(label, dtype=torch.long, device=device)
         # print(label.shape)
         # print(f"time{time.time()-star}")
         with autocast():
-            outputs = resnext50_32x4d(image)
-            loss = criterion(outputs, label)
+            # outputs = resnext50_32x4d(image)
+            # loss = criterion(outputs, label)
+            outputs_1 = resnext50_32x4d(image_1)
+            outputs_2 = resnext50_32x4d(image_2)
+            loss = criterion(outputs_1, outputs_2, label)
 
         # print(f"epoch:{epoch}, loss:{loss.item()}, time:{time.time()-star}")
 
@@ -99,6 +117,11 @@ def main():
 
 if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    pretrained = True
+    retrain = True
+    re_load_strict = False
+    retrain_model_path = r"./ckpt_final/model_347.ckpt"
 
     learning_rate = 0.002  # 0.0006
     batch_size = 32
